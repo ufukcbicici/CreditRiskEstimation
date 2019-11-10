@@ -52,6 +52,7 @@ def analyze_column(data, col_name, col_types):
                                  "unique_ratio": [unique_ratio]})
         print(stats_df)
         column.hist(bins=100)
+        plt.title(col_name)
         plt.show()
     elif col_name in col_types["date"]:
         data[col_name] = pd.to_datetime(data[col_name])
@@ -73,7 +74,7 @@ def preprocess_payment_data(data):
     for col in valid_columns:
         if col == "id":
             continue
-        analyze_column(data, col)
+        analyze_column(data, col, payment_columns_types)
 
 
 payment_data = pd.read_csv("payment_data_ratio20.csv")
