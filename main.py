@@ -1,11 +1,12 @@
 import os
 import pickle
-
+from collections import Counter
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from imblearn.over_sampling import SMOTE
 from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
@@ -16,10 +17,13 @@ from sklearn.linear_model import LogisticRegression
 from scipy.stats import expon
 
 # Payment table
-payment_column_names = ["id", "OVD_t1", "OVD_t2", "OVD_t3", "OVD_sum", "pay_normal", "prod_code", "prod_limit",
+payment_column_names = ["id", "OVD_t1", "OVD_t2", "OVD_t3", "OVD_sum",
+                        "pay_normal", "prod_code", "prod_limit",
                         "update_date",
                         "new_balance", "highest_balance", "report_date"]
-payment_ignore_columns = {"prod_limit", "report_date"}
+payment_ignore_columns = {"prod_limit", "report_date",
+                          "pay_normal", "prod_code", "prod_limit",
+                          "new_balance", "highest_balance"}
 payment_column_types = \
     {"OVD_t1": "numerical",
      "OVD_t2": "numerical",
@@ -33,7 +37,7 @@ payment_column_types = \
      "update_date": "date",
      "report_date": "date"}
 t0_moment = pd.Timestamp(year=2004, month=1, day=1, hour=0)
-payment_date_bin_count = 10
+payment_date_bin_count = 1
 total_model_count = 51
 
 # Customer table
@@ -126,13 +130,11 @@ def analyze_column(data, col_name, col_types):
 
 def preprocess_payment_data(data, ignore_colums, col_types):
     # Step 1: Select valid columns
-    valid_columns = [col_name for col_name in data.columns if col_name not in ignore_colums]
-    data = data.loc[:, valid_columns]
-    # Step 2: Analyze each column
-    for col in valid_columns:
-        if col == "id" or col == "label":
-            continue
-        analyze_column(data, col, col_types)
+    # # Step 2: Analyze each column
+    # for col in valid_columns:
+    #     if col == "id" or col == "label":
+    #         continue
+    #     analyze_column(data, col, col_types)
     # Step 3: Remove rows with missing "update_date" column
     data = data[~data["update_date"].isnull()]
     # Step 4: Impute missing values for "highest_balance" column; use median
@@ -142,6 +144,10 @@ def preprocess_payment_data(data, ignore_colums, col_types):
     for col, col_type in col_types.items():
         if col_type == "categorical":
             data = pd.get_dummies(data, columns=[col], prefix=col)
+
+    valid_columns = [col_name for col_name in data.columns if col_name not in ignore_colums]
+    data = data.loc[:, valid_columns]
+    data["update_date"] = pd.to_datetime(data["update_date"])
     return data
 
 
@@ -222,17 +228,21 @@ def aggregate_time_data(data, binning_start_date, time_column, bin_count):
 
 def train_models(model_count, x_train, x_test, y_train, y_test):
     for model_id in range(model_count):
+        x_train = np.copy(x_train)
+        y_train = np.copy(y_train)
+        sm = SMOTE(random_state=42)
+        x_train, y_train = sm.fit_resample(x_train, y_train)
         model_file_name = "model_{0}.sav".format(model_id)
         if os.path.exists(model_file_name):
             continue
         # Subsample
-        x_train_0 = x_train[y_train == 0]
-        x_train_1 = x_train[y_train == 1]
-        subset_indices = np.random.choice(x_train_0.shape[0], x_train_1.shape[0], replace=False)
-        x_subsampled_train_0 = x_train_0[subset_indices, :]
-        x_train = np.concatenate([x_subsampled_train_0, x_train_1], axis=0)
-        y_train = np.ones_like(y_train)[0: x_train.shape[0]]
-        y_train[0: x_subsampled_train_0.shape[0]] = 0
+        # x_train_0 = x_train[y_train == 0]
+        # x_train_1 = x_train[y_train == 1]
+        # subset_indices = np.random.choice(x_train_0.shape[0], x_train_1.shape[0], replace=False)
+        # x_subsampled_train_0 = x_train_0[subset_indices, :]
+        # x_train = np.concatenate([x_subsampled_train_0, x_train_1], axis=0)
+        # y_train = np.ones_like(y_train)[0: x_train.shape[0]]
+        # y_train[0: x_subsampled_train_0.shape[0]] = 0
 
         # RDF
         feature_dim = x_train.shape[1]
@@ -253,7 +263,7 @@ def train_models(model_count, x_train, x_test, y_train, y_test):
             'rdf__class_weight': [None, "balanced", "balanced_subsample"]
         }
 
-        grid_search = GridSearchCV(pipe, param_grid, iid=False, cv=5, n_jobs=8, refit=True, verbose=0)
+        grid_search = GridSearchCV(pipe, param_grid, iid=False, cv=5, n_jobs=8, refit=True, verbose=5)
         grid_search.fit(X=x_train, y=y_train)
         best_model = grid_search.best_estimator_
         print(" MODEL {0} has been trained.".format(model_id))
@@ -281,15 +291,26 @@ def train_models(model_count, x_train, x_test, y_train, y_test):
 
 def test_models(model_count, x_train, x_test, y_train, y_test):
     models = []
+    predictions = []
     for model_id in range(model_count):
         model_file_name = "model_{0}.sav".format(model_id)
         if not os.path.exists(model_file_name):
             continue
         model = pickle.load(open(model_file_name, 'rb'))
-        models.append(model)
+        models.append(("model_{0}".format(model_id), model))
+        y_hat_train = model.predict(X=x_test)
+        predictions.append(y_hat_train)
+    prediction_matrix = np.stack(predictions, axis=1)
+    avg_predictions = np.mean(prediction_matrix, axis=1)
+    y_hat = (avg_predictions >= 0.5).astype(y_test.dtype)
+
+    # Test Results
+    print("Test Results")
+    # print("Mean Test Accuracy={0}".format(n))
+    report_test = classification_report(y_true=y_test, y_pred=y_hat, target_names=["0", "1"])
+    print(report_test)
+
     print("X")
-
-
 
 payment_data = pd.read_csv("payment_data_ratio20.csv")
 customer_data = pd.read_csv("customer_data_ratio20.csv")
@@ -328,6 +349,6 @@ _X = X_pd.to_numpy(copy=True)
 # Pick a held-out test set, we are going to test our final on this.
 _X_train, _X_test, _y_train, _y_test = train_test_split(_X, _y, test_size=0.2, random_state=42)
 
-# train_models(model_count=total_model_count, x_train=_X_train, x_test=_X_test, y_train=_y_train, y_test=_y_test)
-test_models(model_count=total_model_count, x_train=_X_train, x_test=_X_test, y_train=_y_train, y_test=_y_test)
+train_models(model_count=total_model_count, x_train=_X_train, x_test=_X_test, y_train=_y_train, y_test=_y_test)
+# test_models(model_count=total_model_count, x_train=_X_train, x_test=_X_test, y_train=_y_train, y_test=_y_test)
 
