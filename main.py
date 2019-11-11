@@ -13,6 +13,7 @@ payment_columns_types = {"numerical": {"OVD_t1", "OVD_t2", "OVD_t3", "OVD_sum", 
                                        "new_balance", "highest_balance", "prod_limit"},
                          "categorical": {"prod_code"},
                          "date": {"update_date", "report_date"}}
+date_bin_count = 8
 
 
 def count_missing_entries(data):
@@ -54,13 +55,13 @@ def analyze_column(data, col_name, col_types):
         print(stats_df)
         column.hist(bins=100)
         plt.title(col_name)
-        plt.show()
+        # plt.show()
     elif col_name in col_types["date"]:
         data[col_name] = pd.to_datetime(data[col_name])
         column = data.loc[:, col_name]
         column.hist(bins=100)
         plt.title(col_name)
-        plt.show()
+        # plt.show()
     elif col_name in col_types["categorical"]:
         # Get unique values of the categorical variable
         val_counts = column.value_counts()
@@ -99,6 +100,47 @@ def preprocess_payment_data(data):
     # apply binning for years after 2004, with a given time period (for example two years). The mean and std. of each
     # numerical column for a time bin is calculated as new features. Note that at this point we don't have any categorical
     # values, all of them have been one-hot encoded.
+
+    # Create date bins
+    t0_date = pd.Timestamp(year=2004, month=1, day=1, hour=0)
+    max_date = data["update_date"].max(axis=0) + pd.DateOffset(days=1)
+    min_date = data["update_date"].min(axis=0) - pd.DateOffset(days=1)
+    d_range = pd.DatetimeIndex([min_date])
+    d_range_new = pd.date_range(start=t0_date, end=max_date, periods=date_bin_count)
+    d_range = d_range.append(d_range_new)
+    data_parts = []
+    parts_count = []
+    data_aggregated = None
+    for idx, t in enumerate(range(d_range.shape[0] - 1)):
+        t0 = d_range[t]
+        t1 = d_range[t + 1]
+        data_subset = data.loc[(t0 <= data["update_date"]) & (data["update_date"] <= t1)]
+        parts_count.append(data_subset.shape[0])
+        # Aggregate all data in the bin according to customer ids
+        data_subset_aggregated = data_subset.groupby("id", as_index=False).mean()
+        # Rename columns according to the bins
+        new_col_names = {col: "{0}_t{1}".format(col, idx) for col in data_subset_aggregated.columns if col != "id"}
+        data_subset_aggregated.rename(columns=new_col_names, inplace=True)
+        # Merge each bin; make it outer join to account for missing customer ids in each bin
+        if data_aggregated is None:
+            data_aggregated = data_subset_aggregated
+        else:
+            df_merged = pd.merge(data_aggregated, data_subset_aggregated, left_on='id', right_on='id', how='outer',
+                                 suffixes=('', ''))
+            data_aggregated = df_merged
+
+    print("X")
+
+    # curr_date = date_bins[0]
+    # while True:
+    #     next_date = curr_date + pd.DateOffset(months=date_bin_length_in_months)
+    #     date_bins.append(next_date)
+    #     curr_date = next_date
+    #     if curr_date >= max_date:
+    #         break
+
+    grouped = data.groupby("id").count()
+    print("X")
 
 
 
