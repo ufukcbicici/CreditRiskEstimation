@@ -79,7 +79,6 @@ def preprocess_payment_data(data):
     # Step 3: Remove rows with missing "update_date" column
     data = data[~data["update_date"].isnull()]
     # Step 4: Impute missing values for "highest_balance" column; use median
-    print(data["highest_balance"][7012:7012 + 11])
     highest_balance_values = data["highest_balance"]
     imputer = SimpleImputer(strategy="median", copy=True)
     values = highest_balance_values.to_numpy(copy=True)
@@ -88,8 +87,20 @@ def preprocess_payment_data(data):
     imputed_values = imputer.transform(values)
     imputed_values = np.reshape(imputed_values, newshape=(imputed_values.shape[0], ))
     data["highest_balance"] = imputed_values
-    print(data["highest_balance"][7012:7012 + 11])
-    print("X")
+    # Step 5: Replace categorical variables with one-hot encoding
+    # unencoded_data = data.copy()
+    for categorical_col in payment_columns_types["categorical"]:
+        data = pd.get_dummies(data, columns=[categorical_col], prefix=categorical_col)
+    # Step 6: There is more than one line per user in the payment data, which belong to different update_date values.
+    # We need a fixed size feature vector for classification algorithms. What we are going to do is to bin the
+    # span of the dates in the "update_date" column and aggregate each data row which belong to a specific customer
+    # in the same date bin. The histogram of the "update_date" column shows there is very small amount of data before
+    # 2004 and the distribution is heavily skewed toward new years. So, we group each entry before 2004, and then
+    # apply binning for years after 2004, with a given time period (for example two years). The mean and std. of each
+    # numerical column for a time bin is calculated as new features. Note that at this point we don't have any categorical
+    # values, all of them have been one-hot encoded.
+
+
 
 
 
