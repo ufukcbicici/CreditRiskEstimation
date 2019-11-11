@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.impute import SimpleImputer
 import os
 
 # Payment table
@@ -56,25 +57,40 @@ def analyze_column(data, col_name, col_types):
         plt.show()
     elif col_name in col_types["date"]:
         data[col_name] = pd.to_datetime(data[col_name])
-        print("X")
-
-
-
-    # print("max_highest_balance:{0}".format(max_highest_balance))
-    # print("min_highest_balance:{0}".format(min_highest_balance))
-    # print("mean_highest_balance:{0}".format(mean_highest_balance))
-    # data.loc[:, "highest_balance"].hist(bins=100)
-    # print("X")
+        column = data.loc[:, col_name]
+        column.hist(bins=100)
+        plt.title(col_name)
+        plt.show()
+    elif col_name in col_types["categorical"]:
+        # Get unique values of the categorical variable
+        val_counts = column.value_counts()
+        print(val_counts)
 
 
 def preprocess_payment_data(data):
     # Step 1: Select valid columns
     valid_columns = [col_name for col_name in data.columns if col_name not in payment_ignore_columns]
     data = data.loc[:, valid_columns]
+    # Step 2: Analyze each column
     for col in valid_columns:
         if col == "id":
             continue
         analyze_column(data, col, payment_columns_types)
+    # Step 3: Remove rows with missing "update_date" column
+    data = data[~data["update_date"].isnull()]
+    # Step 4: Impute missing values for "highest_balance" column; use median
+    print(data["highest_balance"][5096:6015])
+    highest_balance_values = data["highest_balance"]
+    imputer = SimpleImputer(strategy="median", copy=True)
+    values = highest_balance_values.to_numpy(copy=True)
+    values = np.expand_dims(values, axis=1)
+    imputer.fit(values)
+    imputed_values = imputer.transform(values)
+    imputed_values = np.reshape(imputed_values, newshape=(imputed_values.shape[0], ))
+    data["highest_balance"] = imputed_values
+    print(data["highest_balance"][5096:6015])
+    print("X")
+
 
 
 payment_data = pd.read_csv("payment_data_ratio20.csv")
