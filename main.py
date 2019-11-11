@@ -9,11 +9,38 @@ payment_column_names = ["id", "OVD_t1", "OVD_t2", "OVD_t3", "OVD_sum", "pay_norm
                         "update_date",
                         "new_balance", "highest_balance", "report_date"]
 payment_ignore_columns = {"prod_limit", "report_date"}
-payment_columns_types = {"numerical": {"OVD_t1", "OVD_t2", "OVD_t3", "OVD_sum", "pay_normal",
-                                       "new_balance", "highest_balance", "prod_limit"},
-                         "categorical": {"prod_code"},
-                         "date": {"update_date", "report_date"}}
-date_bin_count = 8
+payment_column_types = \
+    {"OVD_t1": "numerical",
+     "OVD_t2": "numerical",
+     "OVD_t3": "numerical",
+     "OVD_sum": "numerical",
+     "pay_normal": "numerical",
+     "new_balance": "numerical",
+     "highest_balance": "numerical",
+     "prod_limit": "numerical",
+     "prod_code": "categorical",
+     "update_date": "date",
+     "report_date": "date"}
+t0_moment = pd.Timestamp(year=2004, month=1, day=1, hour=0)
+payment_date_bin_count = 8
+
+# Customer table
+customer_column_names = ["label", "id", "fea_1", "fea_2", "fea_3", "fea_4", "fea_5", "fea_6", "fea_7", "fea_8", "fea_9",
+                         "fea_10", "fea_11"]
+customer_ignore_columns = {}
+
+customer_column_types = \
+    {"fea_1": "categorical",
+     "fea_2": "numerical",
+     "fea_3": "categorical",
+     "fea_4": "numerical",
+     "fea_5": "categorical",
+     "fea_6": "numerical",
+     "fea_7": "categorical",
+     "fea_8": "numerical",
+     "fea_9": "categorical",
+     "fea_10": "numerical",
+     "fea_11": "numerical"}
 
 
 def count_missing_entries(data):
@@ -34,13 +61,30 @@ def count_missing_entries(data):
     # display(pd.DataFrame.from_dict(({k: [100.0 * v] for k, v in nan_percents_dict.items()}))
 
 
+def impute_missing_value(data, col_name, col_type):
+    if col_type == "numerical":
+        strategy = "median"
+    elif col_type == "categorical":
+        strategy = "most_frequent"
+    else:
+        raise NotImplementedError()
+    col_values = data[col_name]
+    imputer = SimpleImputer(strategy=strategy, copy=True)
+    values = col_values.to_numpy(copy=True)
+    values = np.expand_dims(values, axis=1)
+    imputer.fit(values)
+    imputed_values = imputer.transform(values)
+    imputed_values = np.reshape(imputed_values, newshape=(imputed_values.shape[0],))
+    data[col_name] = imputed_values
+
+
 def analyze_column(data, col_name, col_types):
     column = data.loc[:, col_name]
 
     print("Column:{0}".format(col_name))
     # Step 0: Get column type
     print("Type:{0}".format(column.dtypes))
-    if col_name in col_types["numerical"]:
+    if col_types[col_name] == "numerical":
         # Step 1: Get total number of unique values
         unique_count = column.nunique()
         unique_ratio = unique_count / column.shape[0]
@@ -55,44 +99,66 @@ def analyze_column(data, col_name, col_types):
         print(stats_df)
         column.hist(bins=100)
         plt.title(col_name)
-        # plt.show()
-    elif col_name in col_types["date"]:
+        plt.show()
+    elif col_types[col_name] == "date":
         data[col_name] = pd.to_datetime(data[col_name])
         column = data.loc[:, col_name]
         column.hist(bins=100)
         plt.title(col_name)
-        # plt.show()
-    elif col_name in col_types["categorical"]:
+        plt.show()
+    elif col_types[col_name] == "categorical":
         # Get unique values of the categorical variable
         val_counts = column.value_counts()
         print(val_counts)
 
 
-def preprocess_payment_data(data):
+def preprocess_payment_data(data, ignore_colums, col_types):
     # Step 1: Select valid columns
-    valid_columns = [col_name for col_name in data.columns if col_name not in payment_ignore_columns]
+    valid_columns = [col_name for col_name in data.columns if col_name not in ignore_colums]
     data = data.loc[:, valid_columns]
     # Step 2: Analyze each column
     for col in valid_columns:
-        if col == "id":
+        if col == "id" or col == "label":
             continue
-        analyze_column(data, col, payment_columns_types)
+        analyze_column(data, col, col_types)
     # Step 3: Remove rows with missing "update_date" column
     data = data[~data["update_date"].isnull()]
     # Step 4: Impute missing values for "highest_balance" column; use median
-    highest_balance_values = data["highest_balance"]
-    imputer = SimpleImputer(strategy="median", copy=True)
-    values = highest_balance_values.to_numpy(copy=True)
-    values = np.expand_dims(values, axis=1)
-    imputer.fit(values)
-    imputed_values = imputer.transform(values)
-    imputed_values = np.reshape(imputed_values, newshape=(imputed_values.shape[0],))
-    data["highest_balance"] = imputed_values
+    impute_missing_value(data, col_name="highest_balance", col_type=col_types["highest_balance"])
     # Step 5: Replace categorical variables with one-hot encoding
     # unencoded_data = data.copy()
-    for categorical_col in payment_columns_types["categorical"]:
-        data = pd.get_dummies(data, columns=[categorical_col], prefix=categorical_col)
-    # Step 6: There is more than one line per user in the payment data, which belong to different update_date values.
+    for col, col_type in col_types:
+        if col_type == "categorical":
+            data = pd.get_dummies(data, columns=[col], prefix=col)
+    return data
+
+
+def preprocess_customer_data(data, ignore_colums, col_types):
+    # Step 1: Select valid columns
+    valid_columns = [col_name for col_name in data.columns if col_name not in ignore_colums]
+    data = data.loc[:, valid_columns]
+    # Step 2: Analyze each column
+    for col in valid_columns:
+        if col == "id" or col == "label":
+            continue
+        analyze_column(data, col, col_types)
+    # Step 3: Impute missing values if any of the feature columns contains one.
+    for col in valid_columns:
+        # id and label columns MUST not contain any missing value.
+        if col == "id" or col == "label":
+            assert data[col].isna().sum() == 0
+        else:
+            if data[col].isna().sum() > 0:
+                impute_missing_value(data, col_name=col, col_type=col_types[col])
+    # Step 4: Replace categorical variables with one-hot encoding
+    for col, col_type in col_types:
+        if col_type == "categorical":
+            data = pd.get_dummies(data, columns=[col], prefix=col)
+    return data
+
+
+def aggregate_time_data(data, binning_start_date, time_column, bin_count):
+    # There is more than one line per user in the payment data, which belong to different update_date values.
     # We need a fixed size feature vector for classification algorithms. What we are going to do is to bin the
     # span of the dates in the "update_date" column and aggregate each data row which belong to a specific customer
     # in the same date bin. The histogram of the "update_date" column shows there is very small amount of data before
@@ -102,11 +168,11 @@ def preprocess_payment_data(data):
     # values, all of them have been one-hot encoded.
 
     # Create date bins
-    t0_date = pd.Timestamp(year=2004, month=1, day=1, hour=0)
-    max_date = data["update_date"].max(axis=0) + pd.DateOffset(days=1)
-    min_date = data["update_date"].min(axis=0) - pd.DateOffset(days=1)
+    t0_date = binning_start_date
+    max_date = data[time_column].max(axis=0) + pd.DateOffset(days=1)
+    min_date = data[time_column].min(axis=0) - pd.DateOffset(days=1)
     d_range = pd.DatetimeIndex([min_date])
-    d_range_new = pd.date_range(start=t0_date, end=max_date, periods=date_bin_count)
+    d_range_new = pd.date_range(start=t0_date, end=max_date, periods=bin_count)
     d_range = d_range.append(d_range_new)
     data_parts = []
     parts_count = []
@@ -114,7 +180,7 @@ def preprocess_payment_data(data):
     for idx, t in enumerate(range(d_range.shape[0] - 1)):
         t0 = d_range[t]
         t1 = d_range[t + 1]
-        data_subset = data.loc[(t0 <= data["update_date"]) & (data["update_date"] <= t1)]
+        data_subset = data.loc[(t0 <= data[time_column]) & (data[time_column] <= t1)]
         parts_count.append(data_subset.shape[0])
         # Aggregate all data in the bin according to customer ids
         data_subset_aggregated = data_subset.groupby("id", as_index=False).mean()
@@ -140,19 +206,12 @@ print(payment_data.shape)
 print(customer_data.shape)
 count_missing_entries(payment_data)
 count_missing_entries(customer_data)
-print(customer_data["id"].nunique())
-preprocess_payment_data(payment_data)
 
-# payment_data["OVD_t1"].hist(bins=100)
+# Get payment features
+payment_data = preprocess_payment_data(payment_data, payment_ignore_columns, payment_column_types)
+payment_features = aggregate_time_data(payment_data, t0_moment, "update_date", payment_date_bin_count)
 
-# statistics_dict = {"values_1": np.array([12.0, 13.0, 19.0, 123.0, 54.0])}
-# df = pd.DataFrame.from_dict(statistics_dict)
-# # df['values_1'] = df['values_1'].astype(float)
-# df.hist(bins=5)
+# Get customer features
+customer_data = preprocess_customer_data(customer_data, customer_ignore_columns, customer_column_types)
 
-# df2 = pd.DataFrame({'length': [1.5, 0.5, 1.2, 0.9, 3], 'width': [0.7, 0.2, 0.15, 0.2, 1.1]},
-#                    index=['pig', 'rabbit', 'duck', 'chicken', 'horse'])
-# df2.hist(bins=3)
-plt.show()
 print("X")
-# preprocess_payment_data(payment_data)
