@@ -214,4 +214,15 @@ payment_features = aggregate_time_data(payment_data, t0_moment, "update_date", p
 # Get customer features
 customer_features = preprocess_customer_data(customer_data, customer_ignore_columns, customer_column_types)
 
+# Merge both features
+complete_features = pd.merge(customer_features, payment_features, left_on='id', right_on='id', how='outer',
+                             suffixes=('', ''))
+# Be sure that there is no Nan entry
+assert complete_features.isna().sum(axis=0).sum() == 0
+
+# Extact the label data. Drop the "id" column.
+y_pd = complete_features.loc[:, "label"]
+X_pd = complete_features.loc[:, [col_name != "id" and col_name != "label" for col_name in complete_features.columns]]
+y = y_pd.to_numpy(copy=True)
+X = X_pd.to_numpy(copy=True)
 print("X")
