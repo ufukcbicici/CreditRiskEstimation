@@ -86,7 +86,7 @@ def preprocess_payment_data(data):
     values = np.expand_dims(values, axis=1)
     imputer.fit(values)
     imputed_values = imputer.transform(values)
-    imputed_values = np.reshape(imputed_values, newshape=(imputed_values.shape[0], ))
+    imputed_values = np.reshape(imputed_values, newshape=(imputed_values.shape[0],))
     data["highest_balance"] = imputed_values
     # Step 5: Replace categorical variables with one-hot encoding
     # unencoded_data = data.copy()
@@ -128,22 +128,10 @@ def preprocess_payment_data(data):
             df_merged = pd.merge(data_aggregated, data_subset_aggregated, left_on='id', right_on='id', how='outer',
                                  suffixes=('', ''))
             data_aggregated = df_merged
-
-    print("X")
-
-    # curr_date = date_bins[0]
-    # while True:
-    #     next_date = curr_date + pd.DateOffset(months=date_bin_length_in_months)
-    #     date_bins.append(next_date)
-    #     curr_date = next_date
-    #     if curr_date >= max_date:
-    #         break
-
-    grouped = data.groupby("id").count()
-    print("X")
-
-
-
+    data_aggregated.fillna(0.0)
+    # At this stage, we have fixed length payment data summarized in an single vector for every customer. Return the
+    # data frame.
+    return data_aggregated
 
 
 payment_data = pd.read_csv("payment_data_ratio20.csv")
