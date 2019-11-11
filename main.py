@@ -1,7 +1,12 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
 from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+
 import os
 
 # Payment table
@@ -225,4 +230,47 @@ y_pd = complete_features.loc[:, "label"]
 X_pd = complete_features.loc[:, [col_name != "id" and col_name != "label" for col_name in complete_features.columns]]
 y = y_pd.to_numpy(copy=True)
 X = X_pd.to_numpy(copy=True)
-print("X")
+
+# Classification Part
+
+# We are going to use Random Decision Forests as the classifier. For the following reasons:
+# 1- Resistant to overfitting; as the number of trees goes up, the test accuracy asymptotically converges.
+# 2- Can handle unscaled data well due to the feature selection criterion.
+# 3- Fast training (Can train trees in parallel, compared to the iterative Gradient Boosting Trees).
+# 4- Can learn very nonlinear boundaries in the feature space.
+
+# Pick a held-out test set, we are going to test our final on this.
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Hyperparameter grid
+n_estimators = [100]
+bootstrap = [False, True]
+max_depth = [10, 15, 20, 25, 30]
+# verbose = [100]
+class_weight = [None, "balanced"]
+hyperparameters = [{"n_estimators": n_estimators,
+                    "bootstrap": bootstrap,
+                    "max_depth": max_depth,
+                    "class_weight": class_weight}]
+
+rdf = RandomForestClassifier(n_estimators=100, max_depth=2, random_state=0)
+grid_search = GridSearchCV(estimator=rdf, param_grid=hyperparameters, cv=10,
+                           n_jobs=8, scoring=None, refit=True, verbose=5)
+grid_search.fit(X=X_train, y=y_train)
+best_model = grid_search.best_estimator_
+
+# Training Results
+print("Training Results")
+mean_training_accuracy = best_model.score(X=X_train, y=y_train)
+y_hat_train = best_model.predict(X=X_train)
+print("Mean Training Accuracy={0}".format(mean_training_accuracy))
+report_training = classification_report(y_true=y_train, y_pred=y_hat_train, target_names=["0", "1"])
+print(report_training)
+
+# Test Results
+print("Test Results")
+mean_test_accuracy = best_model.score(X=X_test, y=y_test)
+y_hat_test = best_model.predict(X=X_test)
+print("Mean Test Accuracy={0}".format(mean_test_accuracy))
+report_test = classification_report(y_true=y_test, y_pred=y_hat_test, target_names=["0", "1"])
+print(report_test)
