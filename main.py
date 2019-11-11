@@ -2,12 +2,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
 from scipy.stats import expon
 
 # Payment table
@@ -243,52 +245,88 @@ X = X_pd.to_numpy(copy=True)
 # Pick a held-out test set, we are going to test our final on this.
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+# Subsample
+# X_train_0 = X_train[y_train == 0]
+# X_train_1 = X_train[y_train == 1]
+# subset_indices = np.random.choice(X_train_0.shape[0], X_train_1.shape[0], replace=False)
+# X_subsampled_train_0 = X_train_0[subset_indices, :]
+#
+# X_train = np.concatenate([X_subsampled_train_0, X_train_1], axis=0)
+# y_train = np.ones_like(y_train)[0: X_train.shape[0]]
+# y_train[0: X_subsampled_train_0.shape[0]] = 0
+
+# Logistic Regression
+# pca = PCA()
+# logistic = LogisticRegression()
+# pipe = Pipeline(steps=[('pca', pca), ('logistic', logistic)])
+# # Hyperparameter grid
+# exponential_distribution = expon(scale=100)
+# all_regularizer_values = exponential_distribution.rvs(10).tolist()
+# lesser_than_one = np.linspace(0.00001, 1.0, 11)
+# all_regularizer_values.extend(lesser_than_one)
+# all_regularizer_values.extend([10, 100, 1000, 10000])
+# param_grid = [
+#     #     # {
+#     #     #     'pca__n_components': [5, 20, 30, 40, 50, 64, 128, 150, 200],
+#     #     #     'svm__kernel': ['rbf'],
+#     #     #     'svm__gamma': [5.0, 4.0, 3.0, 2.5, 2.0, 1.5, 1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
+#     #     #     'svm__C': all_regularizer_values,
+#     #     #     'svm__class_weight': [None, "balanced"]
+#     #     # },
+#     {
+#         'pca__n_components': [5, 20, 30, 40, 50, 64, 128, 150, 200],
+#         'logistic__solver': ['newton-cg', 'liblinear'],
+#         'logistic__C': all_regularizer_values,
+#         'logistic__class_weight': [None, "balanced"],
+#         'logistic__fit_intercept': [True, False],
+#         'logistic__max_iter': [1000],
+#     }]
+
 # SVM
-pca = PCA()
-svm = SVC()
-pipe = Pipeline(steps=[('pca', pca), ('svm', svm)])
-# Hyperparameter grid
-exponential_distribution = expon(scale=100)
-all_regularizer_values = exponential_distribution.rvs(10).tolist()
-lesser_than_one = np.linspace(0.00001, 1.0, 11)
-all_regularizer_values.extend(lesser_than_one)
-all_regularizer_values.extend([10, 100, 1000, 10000])
-param_grid = [
-    # {
-    #     'pca__n_components': [5, 20, 30, 40, 50, 64, 128, 150, 200],
-    #     'svm__kernel': ['rbf'],
-    #     'svm__gamma': [5.0, 4.0, 3.0, 2.5, 2.0, 1.5, 1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
-    #     'svm__C': all_regularizer_values,
-    #     'svm__class_weight': [None, "balanced"]
-    # },
-    {
-        'pca__n_components': [5, 20, 30, 40, 50, 64, 128, 150, 200],
-        'svm__kernel': ['linear'],
-        'svm__C': all_regularizer_values,
-        'svm__class_weight': [None, "balanced"]
-    }]
+# pca = PCA()
+# svm = SVC()
+# pipe = Pipeline(steps=[('pca', pca), ('svm', svm)])
+# # Hyperparameter grid
+# exponential_distribution = expon(scale=100)
+# all_regularizer_values = exponential_distribution.rvs(10).tolist()
+# lesser_than_one = np.linspace(0.00001, 1.0, 11)
+# all_regularizer_values.extend(lesser_than_one)
+# all_regularizer_values.extend([10, 100, 1000, 10000])
+# # param_grid = [
+# #     # {
+# #     #     'pca__n_components': [5, 20, 30, 40, 50, 64, 128, 150, 200],
+# #     #     'svm__kernel': ['rbf'],
+# #     #     'svm__gamma': [5.0, 4.0, 3.0, 2.5, 2.0, 1.5, 1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
+# #     #     'svm__C': all_regularizer_values,
+# #     #     'svm__class_weight': [None, "balanced"]
+# #     # },
+# #     {
+#         'pca__n_components': [5, 20, 30, 40, 50, 64, 128, 150, 200],
+#         'svm__kernel': ['linear'],
+#         'svm__C': all_regularizer_values,
+#         'svm__class_weight': [None, "balanced"]
+#     }]
 
 # RDF
-# pca = PCA()
-# rdf = RandomForestClassifier()
-# pipe = Pipeline(steps=[('pca', pca), ('rdf', rdf)])
-#
-# # Hyperparameter grid
-# param_grid = {
-#     'pca__n_components': [5, 20, 30, 40, 50, 64, 128, 150, 200],
-#     'rdf__n_estimators': [100],
-#     'rdf__max_depth': [5, 10, 15, 20, 25, 30],
-#     'rdf__bootstrap': [False, True],
-#     'rdf__class_weight': [{0: 1.0, 1: 1.0}, {0: 1.0, 1: 5.0}, {0: 1.0, 1: 10.0}, {0: 1.0, 1: 100.0}]
-#   # 'rdf__class_weight': [None, "balanced", "balanced_subsample"]
-# }
+pca = PCA()
+rdf = RandomForestClassifier()
+pipe = Pipeline(steps=[('pca', pca), ('rdf', rdf)])
+
+# Hyperparameter grid
+param_grid = {
+    'pca__n_components': [5, 20, 30, 40, 50, 64, 128, 150, 200],
+    'rdf__n_estimators': [100],
+    'rdf__max_depth': [5, 10, 15, 20, 25, 30],
+    'rdf__bootstrap': [False, True],
+    # 'rdf__class_weight': [{0: 1.0, 1: 1.0}, {0: 1.0, 1: 5.0}, {0: 1.0, 1: 10.0}, {0: 1.0, 1: 100.0}]
+    'rdf__class_weight': [None, "balanced", "balanced_subsample"]
+}
 
 grid_search = GridSearchCV(pipe, param_grid, iid=False, cv=5, n_jobs=8, refit=True, verbose=5)
 grid_search.fit(X=X_train, y=y_train)
 best_model = grid_search.best_estimator_
 print("Best parameter (CV score=%0.3f):" % grid_search.best_score_)
 print(grid_search.best_params_)
-
 
 # Training Results
 print("Training Results")
