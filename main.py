@@ -79,7 +79,7 @@ def preprocess_payment_data(data):
     # Step 3: Remove rows with missing "update_date" column
     data = data[~data["update_date"].isnull()]
     # Step 4: Impute missing values for "highest_balance" column; use median
-    print(data["highest_balance"][5096:6015])
+    print(data["highest_balance"][7012:7012 + 11])
     highest_balance_values = data["highest_balance"]
     imputer = SimpleImputer(strategy="median", copy=True)
     values = highest_balance_values.to_numpy(copy=True)
@@ -88,7 +88,7 @@ def preprocess_payment_data(data):
     imputed_values = imputer.transform(values)
     imputed_values = np.reshape(imputed_values, newshape=(imputed_values.shape[0], ))
     data["highest_balance"] = imputed_values
-    print(data["highest_balance"][5096:6015])
+    print(data["highest_balance"][7012:7012 + 11])
     print("X")
 
 
