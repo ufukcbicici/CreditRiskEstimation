@@ -127,7 +127,7 @@ def preprocess_payment_data(data, ignore_colums, col_types):
     impute_missing_value(data, col_name="highest_balance", col_type=col_types["highest_balance"])
     # Step 5: Replace categorical variables with one-hot encoding
     # unencoded_data = data.copy()
-    for col, col_type in col_types:
+    for col, col_type in col_types.items():
         if col_type == "categorical":
             data = pd.get_dummies(data, columns=[col], prefix=col)
     return data
@@ -151,9 +151,9 @@ def preprocess_customer_data(data, ignore_colums, col_types):
             if data[col].isna().sum() > 0:
                 impute_missing_value(data, col_name=col, col_type=col_types[col])
     # Step 4: Replace categorical variables with one-hot encoding
-    for col, col_type in col_types:
+    for col, col_type in col_types.items():
         if col_type == "categorical":
-            data = pd.get_dummies(data, columns=[col], prefix=col)
+            data = pd.get_dummies(data, columns=[col], prefix=col, drop_first=True)
     return data
 
 
@@ -194,7 +194,7 @@ def aggregate_time_data(data, binning_start_date, time_column, bin_count):
             df_merged = pd.merge(data_aggregated, data_subset_aggregated, left_on='id', right_on='id', how='outer',
                                  suffixes=('', ''))
             data_aggregated = df_merged
-    data_aggregated.fillna(0.0)
+    data_aggregated.fillna(0.0, inplace=True)
     # At this stage, we have fixed length payment data summarized in an single vector for every customer. Return the
     # data frame.
     return data_aggregated
@@ -212,6 +212,6 @@ payment_data = preprocess_payment_data(payment_data, payment_ignore_columns, pay
 payment_features = aggregate_time_data(payment_data, t0_moment, "update_date", payment_date_bin_count)
 
 # Get customer features
-customer_data = preprocess_customer_data(customer_data, customer_ignore_columns, customer_column_types)
+customer_features = preprocess_customer_data(customer_data, customer_ignore_columns, customer_column_types)
 
 print("X")
